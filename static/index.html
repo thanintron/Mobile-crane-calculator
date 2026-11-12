@@ -1,1 +1,902 @@
-<!doctype html><html lang="th"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#102c40"><meta name="apple-mobile-web-app-capable" content="yes"><link rel="manifest" href="/static/manifest.webmanifest"><link rel="apple-touch-icon" href="/static/icon-192.png"><link rel="icon" href="/static/icon.svg"><link rel="stylesheet" href="/static/style.css"><title>TNT • Crane Planner</title></head><body><header><a href="/">TNT <span>CRANE PLANNER</span></a><button id="install" hidden>ติดตั้งแอป</button></header><main><div class="intro"><div><small>LIFTING PLAN WORKSPACE</small><h1>วางแผนงานยก<br>อย่างเป็นระบบ</h1><p>จัดข้อมูล • ประเมินเบื้องต้น • ส่งต่อให้ผู้รับผิดชอบทบทวน</p></div><div class="stamp">01<br><span>แผนงานยก / DRAFT</span></div></div><aside class="notice">ข้อมูล Load chart เป็นตัวอย่างที่ยังไม่ยืนยันกับผู้ผลิต ผลคำนวณและขนาดแผ่นรองเป็นค่าประมาณ ไม่ใช่การอนุมัติงานยก</aside><p id="network" role="status"></p><div class="layout"><form id="plan"><section><h2>01 <span>ข้อมูลปั้นจั่น</span></h2><label>รุ่นปั้นจั่น<select name="crane_model" id="models" required disabled><option value="">กำลังโหลด…</option></select></label><div class="fields"><label>ความยาวบูม (ม.)<input name="boom_length_m" type="number" value="17" min="0.01" step="any" required></label><label>รัศมีทำงาน (ม.)<input name="working_radius_m" type="number" value="8" min="0.01" step="any" required></label></div><p class="hint">อ้างอิงช่วงในตารางตัวอย่าง ไม่ใช้แทน Load chart ของปั้นจั่นจริง</p></section><section><h2>02 <span>น้ำหนักงานยก</span></h2><div class="fields" id="weights"></div></section><section><h2>03 <span>พื้นรองรับและผู้จัดทำ</span></h2><div class="fields" id="ground"></div><label>ชื่อผู้จัดทำ<input name="planner_name" maxlength="150" placeholder="ระบุชื่อผู้จัดทำ"></label><label>ชื่อ จป. วิชาชีพ<input name="safety_officer_name" maxlength="150"></label><label>ชื่อวิศวกรผู้ควบคุม<input name="engineer_name" maxlength="150"></label></section><div class="actions"><button type="submit" id="calculate">คำนวณแผนเบื้องต้น →</button><button type="button" id="save" class="secondary">บันทึกร่างในเครื่อง</button><button type="button" id="backup" class="secondary">ส่งออกไฟล์สำรอง</button><label class="import-label">นำเข้าไฟล์สำรอง<input id="import" type="file" accept="application/json,.json"></label><button type="button" id="reset" class="secondary">ล้างข้อมูล</button></div><p id="message" role="status" aria-live="polite"></p></form><div class="results"><section><small>CALCULATION SUMMARY</small><h2>ผลประเมินเบื้องต้น</h2><p id="empty">กรอกข้อมูลแล้วกดคำนวณเพื่อดูผล</p><div id="output" hidden><div class="metric"><strong id="util"></strong><span>อัตราส่วนการใช้พิกัดตัวอย่าง</span></div><p id="status"></p><dl id="metrics"></dl><button id="pdf" class="secondary">พิมพ์ / บันทึก PDF ในเครื่อง</button></div><p class="hint">ผลนี้ไม่ประเมินลม การตั้งขา configuration ความแข็งแรงแผ่นรอง หรือยืนยันเอกสารรับรอง</p></section><section><h3>ก่อนนำไปทบทวน</h3><p>เตรียม Load chart ของผู้ผลิตที่ตรงกับเครื่องจริง configuration และข้อมูลแรงกดขา รวมถึงผลประเมินดินและมาตรการงานยก</p><details><summary>วิธีเพิ่มแอปบนหน้าจอ</summary><p>iPhone: เปิดด้วย Safari → แชร์ → เพิ่มไปยังหน้าจอโฮม<br>Android / คอมพิวเตอร์: ใช้เมนูติดตั้งแอปของเบราว์เซอร์ (ต้องเปิดผ่าน HTTPS)</p></details><p class="hint">ข้อมูลจะหายได้หากล้างข้อมูลเบราว์เซอร์ ควรส่งออกไฟล์สำรองเป็นระยะ ร่างบันทึกเฉพาะเบราว์เซอร์นี้ ไม่ซิงก์ข้ามเครื่อง คำนวณ บันทึกร่าง และพิมพ์รายงานในเครื่องได้โดยไม่ส่งข้อมูลแผนไปยังเซิร์ฟเวอร์ หลังเปิดแอปครั้งแรกและเตรียมออฟไลน์สำเร็จ</p></section></div></div></main><footer>TNT MODEL · Planning support · v1.1</footer><script src="/static/calculator.js"></script><script src="/static/app.js" defer></script></body></html>
+<!DOCTYPE html>
+
+<html class="h-full bg-slate-50" lang="th">
+<head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0, maximum-scale=5.0" name="viewport"/>
+<title>Mobile Crane Lifting Plan &amp; Safety Calculator - By Thanintron T.</title>
+<!-- Tailwind CSS CDN -->
+<link href="/static/tailwind.css" rel="stylesheet"/>
+<!-- Google Fonts: Chakra Petch, Sarabun & Inter -->
+<!-- Lucide Icons -->
+<script src="/static/lucide.min.js"></script><link href="/static/fonts.css" rel="stylesheet"/>
+<style>
+    body {
+      font-family: 'Sarabun', 'Inter', sans-serif;
+    }
+    .font-mono-eng {
+      font-family: 'Chakra Petch', 'Inter', monospace;
+    }
+    .trans-smooth {
+      transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+    /* Custom Scrollbar for Light Theme */
+    ::-webkit-scrollbar {
+      width: 7px;
+      height: 7px;
+    }
+    ::-webkit-scrollbar-track {
+      background: #f1f5f9;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #cbd5e1;
+      border-radius: 4px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: #94a3b8;
+    }
+
+    /* Print Style Optimization */
+    @media print {
+      body {
+        background: #ffffff !important;
+        color: #0f172a !important;
+      }
+      .no-print {
+        display: none !important;
+      }
+      .print-surface {
+        background: #ffffff !important;
+        border: 1px solid #cbd5e1 !important;
+        color: #0f172a !important;
+        box-shadow: none !important;
+      }
+      .print-text-dark {
+        color: #0f172a !important;
+      }
+      .print-text-muted {
+        color: #475569 !important;
+      }
+      .print-border-b {
+        border-bottom: 1px solid #94a3b8 !important;
+      }
+      .page-break-after {
+        page-break-after: always;
+      }
+    }
+  </style>
+<link href="/static/manifest.webmanifest" rel="manifest"/><meta content="#f59e0b" name="theme-color"/><meta content="yes" name="apple-mobile-web-app-capable"/><link href="/static/icon-192.png" rel="apple-touch-icon"/><link href="/static/device.css" rel="stylesheet"/></head>
+<body class="bg-slate-50 text-slate-800 min-h-screen flex flex-col antialiased selection:bg-amber-500 selection:text-white">
+<!-- TOP APP HEADER (Light Theme) -->
+<header class="bg-white/95 backdrop-blur-md border-b border-slate-200 sticky top-0 z-40 px-4 py-2.5 shadow-sm no-print">
+<div class="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-3">
+<!-- Brand & Metadata -->
+<div class="flex items-center space-x-3">
+<div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-amber-500 to-amber-400 p-0.5 flex items-center justify-center shadow-md shadow-amber-500/20">
+<div class="w-full h-full bg-white rounded-[10px] flex items-center justify-center">
+<i class="w-5 h-5 text-amber-600" data-lucide="shield-alert"></i>
+</div>
+</div>
+<div>
+<div class="flex items-center gap-2">
+<h1 class="text-base md:text-lg font-bold tracking-tight text-slate-900">
+              CraneLift Pro
+            </h1>
+<span class="text-[10px] px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200 font-semibold font-mono-eng">
+              PRELIMINARY • OFFLINE
+            </span>
+</div>
+<p class="text-[11px] text-slate-500">
+            ระบบคำนวณ และประเมินความปลอดภัยงานยกด้วยรถเครน (เบื้องต้น) • พัฒนาระบบโดย: <span class="text-amber-700 font-semibold">Thanintron T.</span>
+</p>
+</div>
+</div>
+<!-- Quick Actions -->
+<div class="flex items-center gap-2 flex-wrap">
+<!-- Help Guide Button -->
+<button class="px-2.5 py-1.5 rounded-lg bg-sky-50 hover:bg-sky-100 text-sky-700 text-xs font-semibold border border-sky-200 trans-smooth flex items-center gap-1.5 cursor-pointer" onclick="openModal('guideModal')">
+<i class="w-4 h-4 text-sky-600" data-lucide="help-circle"></i>
+<span>คู่มือสำหรับมือใหม่</span>
+</button>
+<!-- Presets -->
+<div class="hidden sm:flex items-center gap-1.5 bg-slate-100 p-1 rounded-lg border border-slate-200">
+<span class="text-[11px] text-slate-500 px-2 font-medium">ตัวอย่าง:</span>
+<button class="px-2 py-1 rounded bg-white hover:bg-slate-200 text-slate-700 text-xs font-mono-eng shadow-xs trans-smooth cursor-pointer" onclick="loadPreset('standard')">
+            ทั่วไป (75%)
+          </button>
+<button class="px-2 py-1 rounded bg-white hover:bg-amber-50 text-amber-700 text-xs font-mono-eng border border-amber-200 shadow-xs trans-smooth cursor-pointer" onclick="loadPreset('critical')">
+            ทบทวน (&gt;75%)
+          </button>
+<button class="px-2 py-1 rounded bg-white hover:bg-rose-50 text-rose-700 text-xs font-mono-eng border border-rose-200 shadow-xs trans-smooth cursor-pointer" onclick="loadPreset('overload')">
+            Overload
+          </button>
+</div>
+<!-- Print Action -->
+<button class="px-3.5 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold shadow-sm shadow-amber-500/30 trans-smooth flex items-center gap-1.5 cursor-pointer" id="printPlan" onclick="printPlan()">
+<i class="w-4 h-4" data-lucide="printer"></i>
+<span>พิมพ์ใบ Lifting Plan</span>
+</button>
+</div>
+</div>
+</header>
+<!-- MAIN WORKSPACE CONTAINER -->
+<div class="max-w-7xl mx-auto w-full px-4 pt-3 no-print"><div class="device-toolbar"><span aria-live="polite" id="deviceStatus" role="status">ข้อมูลเก็บในเครื่องนี้ • ไม่ซิงก์ออนไลน์</span><button id="deviceSave" type="button">บันทึกร่าง</button><button id="deviceBackup" type="button">สำรองไฟล์</button><label>นำเข้าไฟล์<input accept=".json,application/json" id="deviceImport" type="file"/></label><button hidden="" id="deviceInstall" type="button">ติดตั้งแอป</button></div><p class="device-hint">เปิดครั้งแรกผ่านอินเทอร์เน็ต รอพร้อมใช้ออฟไลน์ • ล้างข้อมูลเบราว์เซอร์อาจทำให้ร่างหาย ควรสำรองไฟล์เป็นระยะ</p></div><p class="draft-notice" id="draftNotice">ร่างเพื่อทบทวน — ไม่ใช่การอนุมัติงานยก • พิกัดยกต้องตรงกับ Load chart และ configuration ของเครื่องจริง • แรงกดขาเป็นสมมติฐาน 75%</p><main class="max-w-7xl mx-auto w-full p-4 sm:p-6 lg:p-8 flex-1">
+<div class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+<!-- ================= LEFT COLUMN: STICKY LIVE SCHEMATIC (5 cols on lg) ================= -->
+<div class="lg:col-span-5 flex flex-col gap-4 lg:sticky lg:top-20 z-10">
+<!-- Interactive SVG Diagram Card -->
+<div class="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm flex flex-col overflow-hidden print-surface">
+<div class="flex items-center justify-between mb-2 pb-2 border-b border-slate-100">
+<div class="flex items-center gap-2">
+<span class="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
+<h2 class="text-xs md:text-sm font-bold uppercase tracking-wider text-slate-800">
+                Live Geometry Schematic
+              </h2>
+</div>
+<button class="no-print text-xs text-sky-600 hover:text-sky-700 flex items-center gap-1 font-semibold cursor-pointer" onclick="openModal('diagramExplainerModal')">
+<i class="w-3.5 h-3.5" data-lucide="info"></i> สัญลักษณ์
+            </button>
+</div>
+<p class="text-[11px] text-slate-500 mb-2">
+            ภาพประกอบเรขาคณิตอย่างง่าย (ไม่ใช่แบบหน้างาน): รัศมี (<span class="text-amber-600 font-bold">R</span>), ความยาวบูม (<span class="text-blue-600 font-bold">L</span>), มุมบูม (<span class="text-emerald-600 font-bold">θ</span>), ปลายบูม (<span class="text-purple-600 font-bold">H</span>)
+          </p>
+<!-- Aspect Ratio Preserved SVG Canvas -->
+<div class="w-full aspect-[5/4] bg-slate-50/80 rounded-xl border border-slate-200 p-2 relative flex items-center justify-center overflow-hidden">
+<svg class="w-full h-full" id="craneSvg" preserveaspectratio="xMidYMid meet" viewbox="0 0 500 450">
+<defs>
+<marker id="arrowR" markerheight="6" markerwidth="6" orient="auto-start-reverse" refx="5" refy="5" viewbox="0 0 10 10">
+<path d="M 0 1.5 L 10 5 L 0 8.5 z" fill="#d97706"></path>
+</marker>
+<marker id="arrowL" markerheight="6" markerwidth="6" orient="auto-start-reverse" refx="5" refy="5" viewbox="0 0 10 10">
+<path d="M 0 1.5 L 10 5 L 0 8.5 z" fill="#2563eb"></path>
+</marker>
+<marker id="arrowH" markerheight="6" markerwidth="6" orient="auto-start-reverse" refx="5" refy="5" viewbox="0 0 10 10">
+<path d="M 0 1.5 L 10 5 L 0 8.5 z" fill="#9333ea"></path>
+</marker>
+<pattern height="20" id="grid" patternunits="userSpaceOnUse" width="20">
+<path d="M 20 0 L 0 0 0 20" fill="none" stroke="#e2e8f0" stroke-width="0.8"></path>
+</pattern>
+</defs>
+<!-- Grid -->
+<rect fill="url(#grid)" height="450" width="500"></rect>
+<!-- Ground Reference -->
+<line stroke="#64748b" stroke-dasharray="8 4" stroke-width="2.5" x1="20" x2="480" y1="400" y2="400"></line>
+<text fill="#475569" font-family="'Chakra Petch', monospace" font-size="10" font-weight="600" x="15" y="415">GROUND LEVEL</text>
+<!-- Crane Chassis & Outriggers -->
+<g id="carrierGroup">
+<!-- Outrigger Mats (Under Pads) -->
+<rect fill="#0284c7" height="6" id="visualMatRear" rx="1.5" width="46" x="42" y="394"></rect>
+<rect fill="#0284c7" height="6" id="visualMatFront" rx="1.5" width="46" x="172" y="394"></rect>
+<!-- Jack Cylinders -->
+<line stroke="#64748b" stroke-width="4.5" x1="65" x2="65" y1="375" y2="394"></line>
+<line stroke="#64748b" stroke-width="4.5" x1="195" x2="195" y1="375" y2="394"></line>
+<rect fill="#d97706" height="4" rx="1" width="24" x="53" y="390"></rect>
+<rect fill="#d97706" height="4" rx="1" width="24" x="183" y="390"></rect>
+<!-- Truck Chassis -->
+<rect fill="#475569" height="22" rx="4" stroke="#334155" stroke-width="1.5" width="150" x="55" y="358"></rect>
+<!-- Tires -->
+<circle cx="80" cy="386" fill="#1e293b" r="10" stroke="#94a3b8" stroke-width="3"></circle>
+<circle cx="110" cy="386" fill="#1e293b" r="10" stroke="#94a3b8" stroke-width="3"></circle>
+<circle cx="170" cy="386" fill="#1e293b" r="10" stroke="#94a3b8" stroke-width="3"></circle>
+<!-- Superstructure & Cabin -->
+<rect fill="#334155" height="30" rx="3" stroke="#f59e0b" stroke-width="1.5" width="45" x="75" y="328"></rect>
+<text fill="#fef08a" font-family="'Chakra Petch', monospace" font-size="8" font-weight="bold" x="82" y="347">CWT</text>
+<rect fill="#cbd5e1" height="25" opacity="0.9" rx="3" width="28" x="120" y="333"></rect>
+</g>
+<!-- Center of Rotation (CL) -->
+<line stroke="#ef4444" stroke-dasharray="5 3" stroke-width="1.2" x1="130" x2="130" y1="50" y2="415"></line>
+<text fill="#dc2626" font-family="'Chakra Petch', monospace" font-size="9" font-weight="bold" x="135" y="65">CENTER OF ROTATION (แกนหมุน CL)</text>
+<!-- Pivot Point -->
+<circle cx="130" cy="330" fill="#0284c7" id="pivotPoint" r="5" stroke="#0369a1" stroke-width="2"></circle>
+<!-- Boom Angle Arc Indicator -->
+<path d="M 170 330 A 40 40 0 0 0 160 300" fill="none" id="angleArc" stroke="#059669" stroke-width="2"></path>
+<text fill="#047857" font-family="'Chakra Petch', monospace" font-size="11" font-weight="bold" id="angleLabel" x="175" y="320">θ = 65°</text>
+<!-- Boom Line -->
+<line id="boomLine" stroke="#d97706" stroke-linecap="round" stroke-width="8" x1="130" x2="350" y1="330" y2="100"></line>
+<line id="boomInnerLine" stroke="#fcd34d" stroke-linecap="round" stroke-width="3" x1="130" x2="350" y1="330" y2="100"></line>
+<!-- Boom Length (L) Dimension Line -->
+<line id="dimBoomLine" marker-end="url(#arrowL)" marker-start="url(#arrowL)" stroke="#2563eb" stroke-dasharray="4 2" stroke-width="1.5" x1="120" x2="340" y1="320" y2="90"></line>
+<text fill="#1d4ed8" font-family="'Chakra Petch', monospace" font-size="11" font-weight="bold" id="dimBoomText" transform="rotate(-40 220 190)" x="220" y="225">L = 25.0 m</text>
+<!-- Boom Head -->
+<circle cx="350" cy="100" fill="#475569" id="boomHead" r="5" stroke="#334155" stroke-width="2"></circle>
+<!-- Hoist Wire Line -->
+<line id="hoistLine" stroke="#64748b" stroke-dasharray="2 1" stroke-width="1.8" x1="350" x2="350" y1="100" y2="280"></line>
+<!-- Hook Block -->
+<g id="hookBlockGroup" transform="translate(342, 280)">
+<rect fill="#cbd5e1" height="20" rx="3" stroke="#475569" stroke-width="1.5" width="16" x="0" y="0"></rect>
+<circle cx="8" cy="8" fill="#0f172a" r="4"></circle>
+<path d="M 8 20 C 8 26, 2 28, 2 34 C 2 39, 12 41, 14 36 C 15 32, 11 30, 8 30" fill="none" stroke="#d97706" stroke-linecap="round" stroke-width="2.5"></path>
+</g>
+<!-- Rigging Slings -->
+<line id="sling1" stroke="#0284c7" stroke-width="1.5" x1="350" x2="320" y1="316" y2="355"></line>
+<line id="sling2" stroke="#0284c7" stroke-width="1.5" x1="350" x2="380" y1="316" y2="355"></line>
+<!-- Suspended Equipment Load -->
+<g id="loadGroup" transform="translate(310, 355)">
+<rect fill="#0284c7" height="38" rx="4" stroke="#0369a1" stroke-width="1.5" width="80" x="0" y="0"></rect>
+<text fill="#ffffff" font-size="8.5" font-weight="bold" text-anchor="middle" x="40" y="10">EQUIPMENT LOAD</text>
+<text fill="#e0f2fe" font-size="10" font-weight="'Chakra Petch', monospace" id="loadWeightBadge" text-anchor="middle" x="40" y="35">12.00 t</text>
+<circle cx="40" cy="19" fill="none" r="6" stroke="#ef4444" stroke-width="1.5"></circle>
+<path d="M 34 19 L 46 19 M 40 13 L 40 25" stroke="#ef4444" stroke-width="1.5"></path>
+</g>
+<!-- Working Radius (R) Dimension Line -->
+<line id="radiusLine" marker-end="url(#arrowR)" marker-start="url(#arrowR)" stroke="#d97706" stroke-width="2" x1="130" x2="350" y1="412" y2="412"></line>
+<text fill="#b45309" font-family="'Chakra Petch', monospace" font-size="11" font-weight="bold" id="radiusText" text-anchor="middle" x="250" y="437">Working Radius (R) = 10.0 m</text>
+<!-- Tip Height (H) Dimension Line -->
+<line id="heightLine" marker-end="url(#arrowH)" marker-start="url(#arrowH)" stroke="#9333ea" stroke-dasharray="4 2" stroke-width="1.5" x1="435" x2="435" y1="400" y2="100"></line>
+<line stroke="#9333ea" stroke-dasharray="2 2" stroke-width="1" x1="355" x2="445" y1="100" y2="100"></line>
+<text fill="#7e22ce" font-family="'Chakra Petch', monospace" font-size="10" font-weight="bold" id="heightText" transform="rotate(90 445 250)" x="445" y="250">Tip Height H = 24.2 m</text>
+</svg>
+</div>
+<!-- Quick Metrics Bar Under Diagram -->
+<div class="mt-3 grid grid-cols-2 sm:grid-cols-4 gap-2 text-center font-mono-eng">
+<div class="bg-slate-50 p-2 rounded-xl border border-slate-200">
+<span class="text-[10px] text-slate-500 block">มุมบูม (θ)</span>
+<span class="text-xs md:text-sm font-bold text-emerald-700" id="quickAngle">66.4°</span>
+</div>
+<div class="bg-slate-50 p-2 rounded-xl border border-slate-200">
+<span class="text-[10px] text-slate-500 block">ความสูงปลาย</span>
+<span class="text-xs md:text-sm font-bold text-purple-700" id="quickHeight">24.9 m</span>
+</div>
+<div class="bg-slate-50 p-2 rounded-xl border border-slate-200">
+<span class="text-[10px] text-slate-500 block">น้ำหนักรวม</span>
+<span class="text-xs md:text-sm font-bold text-amber-700" id="quickGross">13.50 t</span>
+</div>
+<div class="bg-slate-50 p-2 rounded-xl border border-slate-200">
+<span class="text-[10px] text-slate-500 block">แรงกดขาช้าง</span>
+<span class="text-xs md:text-sm font-bold text-sky-700" id="quickPointLoad">32.6 t</span>
+</div>
+</div>
+</div>
+<!-- Sticky Safety Notice (Desktop) -->
+<div class="bg-white border border-slate-200 rounded-2xl p-3.5 text-xs text-slate-600 space-y-1.5 shadow-sm no-print">
+<div class="flex items-center gap-2 text-amber-700 font-bold">
+<i class="w-4 h-4 text-amber-600" data-lucide="shield-check"></i>
+<span>กฎความปลอดภัยสำคัญ (Site Safety Essentials)</span>
+</div>
+<ul class="list-disc list-inside space-y-0.5 text-[11px] text-slate-500 leading-relaxed">
+<li>ห้ามยกเฉียง (Side Loading) บูมต้องตั้งตรงกับศูนย์ถ่วงชิ้นงาน</li>
+<li>ตั้งขาค้ำยันและล้อยางให้ตรงกับคู่มือผู้ผลิตและ configuration ของตารางพิกัด</li>
+<li>ตรวจสอบแนวรัศมีวงสวิง 360° ป้องกันส่วนท้ายรถชนสิ่งกีดขวาง</li>
+</ul>
+</div>
+</div>
+<!-- ================= RIGHT COLUMN: COMPUTATION MODULES & FORMS (7 cols on lg) ================= -->
+<div class="lg:col-span-7 flex flex-col gap-5">
+<!-- MODULE 1: Crane Geometry -->
+<div class="bg-white border border-slate-200 rounded-2xl p-4 md:p-5 shadow-sm print-surface">
+<div class="flex items-center justify-between border-b border-slate-100 pb-3 mb-4">
+<div class="flex items-center gap-2.5">
+<div class="p-1.5 rounded-lg bg-blue-50 text-blue-600 border border-blue-200">
+<i class="w-4 h-4" data-lucide="ruler"></i>
+</div>
+<div>
+<h3 class="text-sm font-bold text-slate-900 uppercase tracking-wide">
+                  1. มิติ และเรขาคณิตการยก (Crane Geometry Setup)
+                </h3>
+<p class="text-xs text-slate-500">กำหนดระยะทางกายภาพของงานยกตามสภาพหน้างานจริง</p>
+</div>
+</div>
+<button class="no-print text-xs text-slate-500 hover:text-slate-800 flex items-center gap-1 cursor-pointer" onclick="openModal('geometryHelpModal')">
+<i class="w-3.5 h-3.5" data-lucide="help-circle"></i> วิธีวัดค่า
+            </button>
+</div>
+<div class="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
+<!-- Working Radius -->
+<div>
+<label class="block text-xs font-semibold text-slate-700 mb-1 flex items-center justify-between" for="inputRadius">
+<span>รัศมีการทำงาน (Radius - R)</span>
+<span class="text-amber-600 font-bold">*วัดจริง</span>
+</label>
+<div class="relative">
+<input class="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-sm text-slate-900 font-bold font-mono-eng focus:outline-none focus:border-amber-500 focus:bg-white" data-plan-field="true" id="inputRadius" max="999" min="0" oninput="recalculateAll()" step="any" type="number" value="10.0"/>
+<span class="absolute right-3 top-2 text-xs text-slate-400 font-semibold">ม. (m)</span>
+</div>
+<span class="text-[10px] text-slate-500 mt-1 block">แกนหมุนเครนถึงแนวดิ่งตะขอ</span>
+</div>
+<!-- Boom Length -->
+<div>
+<label class="block text-xs font-semibold text-slate-700 mb-1 flex items-center justify-between" for="inputBoomLength">
+<span>ความยาวบูม (Boom Length - L)</span>
+<span class="text-blue-600 font-bold">*</span>
+</label>
+<div class="relative">
+<input class="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-sm text-slate-900 font-bold font-mono-eng focus:outline-none focus:border-blue-500 focus:bg-white" data-plan-field="true" id="inputBoomLength" max="999" min="0" oninput="recalculateAll()" step="any" type="number" value="25.0"/>
+<span class="absolute right-3 top-2 text-xs text-slate-400 font-semibold">ม. (m)</span>
+</div>
+<span class="text-[10px] text-slate-500 mt-1 block">ความยาวบูมหลักที่ยืดออก</span>
+</div>
+<!-- Boom Pivot Height -->
+<div>
+<label class="block text-xs font-semibold text-slate-700 mb-1" for="inputPivotHeight">
+<span>ความสูงสลักโคนบูม (Pivot H)</span>
+</label>
+<div class="relative">
+<input class="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-sm text-slate-900 font-bold font-mono-eng focus:outline-none focus:border-slate-500 focus:bg-white" data-plan-field="true" id="inputPivotHeight" max="99" min="0" oninput="recalculateAll()" step="any" type="number" value="2.2"/>
+<span class="absolute right-3 top-2 text-xs text-slate-400 font-semibold">ม. (m)</span>
+</div>
+<span class="text-[10px] text-slate-500 mt-1 block">ระดับสลักโคนบูมจากพื้นดิน</span>
+</div>
+</div>
+<div class="hidden mt-3 p-2.5 bg-rose-50 border border-rose-200 rounded-xl text-rose-700 text-xs flex items-center gap-2" id="geometryError">
+<i class="w-4 h-4 flex-shrink-0 text-rose-600" data-lucide="alert-octagon"></i>
+<span><strong>ข้อผิดพลาดทางเรขาคณิต:</strong> ค่ารัศมี (R) ต้องไม่มากกว่าความยาวบูม (L) โปรดปรับค่าใหม่</span>
+</div>
+</div>
+<!-- MODULE 2: Total Gross Weight & Deductions -->
+<div class="bg-white border border-slate-200 rounded-2xl p-4 md:p-5 shadow-sm print-surface">
+<div class="flex items-center justify-between border-b border-slate-100 pb-3 mb-4">
+<div class="flex items-center gap-2.5">
+<div class="p-1.5 rounded-lg bg-emerald-50 text-emerald-600 border border-emerald-200">
+<i class="w-4 h-4" data-lucide="scale"></i>
+</div>
+<div>
+<h3 class="text-sm font-bold text-slate-900 uppercase tracking-wide">
+                  2. น้ำหนักยก และส่วนหักทอน (Total Gross Load)
+                </h3>
+<p class="text-xs text-slate-500">คำนวณน้ำหนักชิ้นงานรวมอุปกรณ์ยกทั้งหมด (ตัน - Metric Tonnes)</p>
+</div>
+</div>
+<span class="text-xs px-2.5 py-1 rounded-lg bg-emerald-50 text-emerald-700 border border-emerald-200 font-mono-eng font-bold" id="grossBadge">
+              Total: 13.50 t
+            </span>
+</div>
+<div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+<!-- Net Load -->
+<div class="bg-slate-50 p-3 rounded-xl border border-slate-200">
+<label class="block text-xs font-semibold text-slate-700 mb-1 flex justify-between" for="loadNet">
+<span>1. ชิ้นงานสุทธิ (Net Load)</span>
+<span class="text-sky-600 text-[8px] font-bold">อุปกรณ์</span>
+</label>
+<div class="relative">
+<input class="w-full bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 text-sm text-slate-900 font-bold font-mono-eng focus:outline-none focus:border-sky-500" data-plan-field="true" id="loadNet" max="999" min="0" oninput="recalculateAll()" step="any" type="number" value="12.00"/>
+<span class="absolute right-2.5 top-1.5 text-xs text-slate-400">t</span>
+</div>
+<span class="text-[10px] text-slate-500 mt-1 block">น้ำหนักสุทธิของเครื่องจักร</span>
+</div>
+<!-- Hook Block -->
+<div class="bg-slate-50 p-3 rounded-xl border border-slate-200">
+<label class="block text-xs font-semibold text-slate-700 mb-1 flex justify-between" for="loadHook">
+<span>2. ตะขอยก (Hook Block)</span>
+<span class="text-amber-600 text-[8px] font-bold">Deduction</span>
+</label>
+<div class="relative">
+<input class="w-full bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 text-sm text-slate-900 font-bold font-mono-eng focus:outline-none focus:border-amber-500" data-plan-field="true" id="loadHook" max="999" min="0" oninput="recalculateAll()" step="any" type="number" value="0.80"/>
+<span class="absolute right-2.5 top-1.5 text-xs text-slate-400">t</span>
+</div>
+<span class="text-[10px] text-slate-500 mt-1 block">Hook Block + ลูกตุ้ม Ball</span>
+</div>
+<!-- Rigging Tackles -->
+<div class="bg-slate-50 p-3 rounded-xl border border-slate-200">
+<label class="block text-xs font-semibold text-slate-700 mb-1 flex justify-between" for="loadRigging">
+<span>3. อุปกรณ์ช่วยยก (Rigging)</span>
+<span class="text-amber-600 text-[8px] font-bold">Deduction</span>
+</label>
+<div class="relative">
+<input class="w-full bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 text-sm text-slate-900 font-bold font-mono-eng focus:outline-none focus:border-amber-500" data-plan-field="true" id="loadRigging" max="999" min="0" oninput="recalculateAll()" step="any" type="number" value="0.40"/>
+<span class="absolute right-2.5 top-1.5 text-xs text-slate-400">t</span>
+</div>
+<span class="text-[10px] text-slate-500 mt-1 block">สลิงผ้า, Shackle, Spreader</span>
+</div>
+<!-- Cable Fall Deduction -->
+<div class="bg-slate-50 p-3 rounded-xl border border-slate-200">
+<label class="block text-xs font-semibold text-slate-700 mb-1 flex justify-between" for="loadCable">
+<span>4. ลวดสลิงเผื่อ (Hoist Wire)</span>
+<span class="text-amber-600 text-[8px] font-bold">Deduction</span>
+</label>
+<div class="relative">
+<input class="w-full bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 text-sm text-slate-900 font-bold font-mono-eng focus:outline-none focus:border-slate-500" data-plan-field="true" id="loadCable" max="999" min="0" oninput="recalculateAll()" step="any" type="number" value="0.15"/>
+<span class="absolute right-2.5 top-1.5 text-xs text-slate-400">t</span>
+</div>
+<span class="text-[10px] text-slate-500 mt-1 block">น้ำหนักลวดตามจำนวนทบสาย</span>
+</div>
+<!-- Other Deductions / Jib -->
+<div class="bg-slate-50 p-3 rounded-xl border border-slate-200">
+<label class="block text-xs font-semibold text-slate-700 mb-1 flex justify-between" for="loadExtra">
+<span>5. หักทอนอื่นๆ (Stowed Jib)</span>
+<span class="text-amber-600 text-[8px] font-bold">Deduction</span>
+</label>
+<div class="relative">
+<input class="w-full bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 text-sm text-slate-900 font-bold font-mono-eng focus:outline-none focus:border-slate-500" data-plan-field="true" id="loadExtra" max="999" min="0" oninput="recalculateAll()" step="any" type="number" value="0.15"/>
+<span class="absolute right-2.5 top-1.5 text-xs text-slate-400">t</span>
+</div>
+<span class="text-[10px] text-slate-500 mt-1 block">เช่น Fly Jib พับเก็บข้างบูม</span>
+</div>
+<!-- Total Gross Result Box -->
+<div class="bg-gradient-to-br from-blue-50 to-indigo-50/70 p-3 rounded-xl border border-blue-200 flex flex-col justify-center">
+<span class="text-xs text-blue-900 font-bold">น้ำหนักยกทั้งหมด (Gross Load)</span>
+<div class="flex items-baseline gap-1 mt-1">
+<span class="text-2xl font-black text-blue-700 font-mono-eng" id="displayTotalGross">13.50</span>
+<span class="text-xs text-slate-600 font-semibold">ตัน (Tonnes)</span>
+</div>
+<span class="text-[10px] text-slate-500 mt-0.5">รวมชิ้นงาน และอุปกรณ์ยกทั้งหมด</span>
+</div>
+</div>
+</div>
+<!-- MODULE 3: Load Chart Capacity Verification -->
+<div class="bg-white border border-slate-200 rounded-2xl p-4 md:p-5 shadow-sm print-surface">
+<div class="flex items-center justify-between border-b border-slate-100 pb-3 mb-4">
+<div class="flex items-center gap-2.5">
+<div class="p-1.5 rounded-lg bg-amber-50 text-amber-600 border border-amber-200">
+<i class="w-4 h-4" data-lucide="gauge"></i>
+</div>
+<div>
+<h3 class="text-sm font-bold text-slate-900 uppercase tracking-wide">
+                  3. พิกัดยก และประเมินความปลอดภัย (Load Chart Verification)
+                </h3>
+<p class="text-xs text-slate-500">กรอกค่าพิกัดปลอดภัยจากคู่มือ Load Chart ประจำเครน</p>
+</div>
+</div>
+<span class="text-xs px-2.5 py-0.5 rounded-full font-bold font-mono-eng" id="badgeStatusHeader">
+              NORMAL LIFT
+            </span>
+</div>
+<div class="grid grid-cols-1 md:grid-cols-12 gap-5 items-center">
+<div class="md:col-span-6 flex flex-col gap-3">
+<div>
+<label class="block text-xs font-semibold text-slate-800 mb-1 flex justify-between" for="inputRatedCapacity">
+<span>พิกัดยกปลอดภัยจากตาราง (Rated Capacity)</span>
+<span class="text-amber-600 font-bold">*Load Chart</span>
+</label>
+<div class="relative">
+<input class="w-full bg-slate-50 border border-amber-400 rounded-xl px-3 py-2 text-base font-bold text-slate-900 font-mono-eng focus:outline-none focus:border-amber-600 focus:bg-white" data-plan-field="true" id="inputRatedCapacity" max="999" min="0.01" oninput="recalculateAll()" step="any" type="number" value="18.00"/>
+<span class="absolute right-3 top-2.5 text-xs text-slate-400 font-bold">ตัน (t)</span>
+</div>
+<!-- แสดงเฉพาะข้อความนี้ตามที่สั่ง -->
+<p class="text-[11px] text-slate-500 mt-1">
+                  พิกัดสูงสุดตามตารางผู้ผลิต
+                </p>
+</div>
+<!-- Residual Safe Margin -->
+<div class="bg-slate-50 rounded-xl p-3 border border-slate-200 flex items-center justify-between">
+<div>
+<span class="text-xs text-slate-500 block">พิกัดยกคงเหลือ (Safe Margin)</span>
+<span class="text-sm font-bold text-slate-800 font-mono-eng" id="displayMargin">+4.50 t</span>
+</div>
+<div class="text-right">
+<span class="text-xs text-slate-500 block">ช่วงสีเพื่อช่วยทบทวน</span>
+<span class="text-xs text-emerald-700 font-semibold">ไม่อนุมัติโดยอัตโนมัติ</span>
+</div>
+</div>
+</div>
+<!-- Gauge Card -->
+<div class="md:col-span-6 bg-slate-50 rounded-xl p-4 border border-slate-200 flex flex-col items-center justify-center text-center">
+<span class="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">อัตราการใช้งานพิกัดเครน (Utilization Rate)</span>
+<div class="flex items-baseline gap-1 my-1">
+<span class="text-4xl md:text-5xl font-black font-mono-eng text-emerald-600 trans-smooth" id="displayPercentage">75.0</span>
+<span class="text-xl font-bold text-slate-400">%</span>
+</div>
+<div class="w-full bg-slate-200 rounded-full h-3 mt-2 mb-2 p-0.5 overflow-hidden">
+<div class="h-full rounded-full bg-emerald-500 trans-smooth" id="utilizationProgressBar" style="width: 75%;"></div>
+</div>
+<div class="w-full flex justify-between text-[10px] text-slate-500 font-mono-eng px-0.5">
+<span>0%</span>
+<span class="text-emerald-700 font-semibold">≤75% (ช่วงแสดงผล)</span>
+<span class="text-amber-700 font-semibold">90% (ช่วงแสดงผล)</span>
+<span class="text-rose-700 font-semibold">&gt;100% (Danger)</span>
+</div>
+</div>
+</div>
+<!-- Dynamic Safety Status Banner -->
+<div class="mt-4 p-3.5 rounded-xl border border-emerald-200 bg-emerald-50 flex items-start gap-3 trans-smooth" id="safetyStatusBox">
+<div class="mt-0.5 text-emerald-600 flex-shrink-0" id="safetyStatusIcon">
+<i class="w-5 h-5" data-lucide="check-circle-2"></i>
+</div>
+<div>
+<h4 class="text-xs md:text-sm font-bold text-emerald-900" id="safetyStatusTitle">
+                สถานะ: งานยกทั่วไปผ่านเกณฑ์ความปลอดภัย (Normal Lift ≤ 75%)
+              </h4>
+<p class="text-xs text-slate-600 mt-0.5" id="safetyStatusDesc">
+                อัตราการใช้งานพิกัดเครนไม่เกิน 75% สามารถทำการยกได้ตามแผนงานยกมาตรฐาน โดยต้องตรวจสอบแรงดันดิน ขาช้าง (Outriggers) กางสุด 100% และตรวจเช็กอุปกรณ์ช่วยยกก่อนเริ่มงาน
+              </p>
+</div>
+</div>
+</div>
+<!-- MODULE 4: Outrigger Point Load & Crane Mat Calculation -->
+<div class="bg-white border border-slate-200 rounded-2xl p-4 md:p-5 shadow-sm print-surface">
+<div class="flex items-center justify-between border-b border-slate-100 pb-3 mb-4">
+<div class="flex items-center gap-2.5">
+<div class="p-1.5 rounded-lg bg-sky-50 text-sky-600 border border-sky-200">
+<i class="w-4 h-4" data-lucide="layers"></i>
+</div>
+<div>
+<h3 class="text-sm font-bold text-slate-900 uppercase tracking-wide">
+                  4. แรงกดขาช้าง และขนาดแผ่นกระจายน้ำหนัก (Outrigger Mat Calculator)
+                </h3>
+<p class="text-xs text-slate-500">ป้องกันดินทรุดตัวใต้ขาเครน (Punch-Through Failure Prevention)</p>
+</div>
+</div>
+<button class="no-print text-xs text-sky-600 hover:text-sky-700 flex items-center gap-1 font-semibold cursor-pointer" onclick="openModal('soilHelpModal')">
+<i class="w-3.5 h-3.5" data-lucide="info"></i> ตารางค่าดิน
+            </button>
+</div>
+<div class="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
+<!-- Crane Self Weight + CWT -->
+<div>
+<label class="block text-xs font-semibold text-slate-700 mb-1" for="inputCraneWeight">
+<span>น้ำหนักตัวรถเครน + CWT</span>
+<span class="text-sky-600 font-bold">*</span>
+</label>
+<div class="relative">
+<input class="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-sm text-slate-900 font-bold font-mono-eng focus:outline-none focus:border-sky-500 focus:bg-white" data-plan-field="true" id="inputCraneWeight" max="999" min="0" oninput="recalculateAll()" step="any" type="number" value="30.0"/>
+<span class="absolute right-3 top-2 text-xs text-slate-400 font-semibold">ตัน (t)</span>
+</div>
+<span class="text-[10px] text-slate-500 mt-1 block">ดูจาก Nameplate / ปจ.2 หรือคู่มือรถ</span>
+</div>
+<!-- Soil Type Select -->
+<div>
+<label class="block text-xs font-semibold text-slate-700 mb-1" for="selectSoilType">
+<span>สภาพชั้นดินหน้างาน (Soil Type)</span>
+</label>
+<select class="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-xs text-slate-800 font-medium focus:outline-none focus:border-sky-500 focus:bg-white cursor-pointer" data-plan-field="true" id="selectSoilType" onchange="onSoilSelectChange()">
+<option value="40">คอนกรีตเสริมเหล็ก / หินแข็ง (40 t/m²)</option>
+<option selected="" value="25">ดินลูกรัง / หินคลุกบดอัดแน่น (25 t/m²)</option>
+<option value="15">ดินทรายแน่นปานกลาง (15 t/m²)</option>
+<option value="10">ดินเหนียวแข็งปานกลาง (10 t/m²)</option>
+<option value="5">ดินถมใหม่ / ผิวยางมะตอย (5 t/m²)</option>
+<option value="2.5">ดินเลน / ริมน้ำ / ดินอ่อนมาก (2.5 t/m² - เสี่ยงสูง)</option>
+<option value="custom">-- กรอกค่าดินเอง (Custom) --</option>
+</select>
+<div class="hidden mt-2" id="customSoilWrap">
+<input class="w-full bg-white border border-sky-400 rounded-lg px-2.5 py-1 text-xs text-slate-900 font-mono-eng" data-plan-field="true" id="inputCustomGBC" max="999" min="0.1" oninput="recalculateAll()" placeholder="ระบุค่ารับแรงดิน (t/m²)" step="any" type="number"/>
+</div>
+</div>
+<!-- Ground Safety Factor -->
+<div>
+<label class="block text-xs font-semibold text-slate-700 mb-1" for="inputSoilSF">
+<span>Safety Factor เผื่อสภาพดิน</span>
+</label>
+<div class="relative">
+<input class="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-sm text-slate-900 font-bold font-mono-eng focus:outline-none focus:border-sky-500 focus:bg-white" data-plan-field="true" id="inputSoilSF" max="9.9" min="1.0" oninput="recalculateAll()" step="any" type="number" value="1.25"/>
+</div>
+<span class="text-[10px] text-slate-500 mt-1 block">ค่าตัวคูณสมมติฐาน ต้องให้ผู้รับผิดชอบกำหนด</span>
+</div>
+</div>
+<!-- Mat Calculation Output Box -->
+<div class="mt-4 p-4 bg-slate-50 rounded-xl border border-slate-200 grid grid-cols-1 sm:grid-cols-3 gap-4 items-center">
+<div>
+<span class="text-xs text-slate-500 block">แรงกดจุดสูงสุดต่อขา (Max Point Load):</span>
+<span class="text-lg md:text-xl font-bold text-sky-700 font-mono-eng" id="displayPointLoad">32.63 ตัน</span>
+<span class="text-[10px] text-slate-500 block mt-0.5">(คิดที่ 75% ของน้ำหนักรวมทั้งระบบ)</span>
+</div>
+<div>
+<span class="text-xs text-slate-500 block">พื้นที่แผ่นรองขั้นต่ำที่ต้องการ:</span>
+<span class="text-lg md:text-xl font-bold text-amber-700 font-mono-eng" id="displayMatArea">1.63 ตร.ม.</span>
+<span class="text-[10px] text-slate-500 block mt-0.5">(รวม Safety Factor แล้ว)</span>
+</div>
+<div class="bg-white border border-sky-200 p-2.5 rounded-xl text-center shadow-xs">
+<span class="text-[11px] text-sky-800 block font-bold">ขนาดแผ่นสี่เหลี่ยมแนะนำ</span>
+<span class="text-base font-black text-sky-900 font-mono-eng mt-0.5 block" id="displayMatDim">1.3 × 1.3 ม.</span>
+<span class="text-[10px] text-slate-500 block">ขนาดประมาณการ ต้องตรวจความแข็งแรงแผ่นรอง</span>
+</div>
+</div>
+<div class="mt-3 text-[11px] text-slate-600 flex items-start gap-2 bg-sky-50/60 p-2.5 rounded-lg border border-sky-100">
+<i class="w-4 h-4 text-sky-600 flex-shrink-0 mt-0.5" data-lucide="alert-circle"></i>
+<div>
+<strong class="text-slate-800">กฎความแข็งเกร็งของแผ่น (Mat Rigidity):</strong> แผ่นกระจายน้ำหนักต้องมีความหนาเพียงพอ ไม่แอ่นตัว ไม่โก่งงอเมื่อรับแรงกด ความหนาและการจัดวางต้องออกแบบจากแรงจริงและความแข็งแรงของวัสดุ
+            </div>
+</div>
+</div>
+<!-- MODULE 5: Thai Legal (แบบ ปจ.2) & Engineering Sign-off Section -->
+<div class="bg-white border border-slate-200 rounded-2xl p-4 md:p-5 shadow-sm print-surface">
+<div class="flex items-center justify-between border-b border-slate-100 pb-3 mb-4">
+<div class="flex items-center gap-2.5">
+<div class="p-1.5 rounded-lg bg-emerald-50 text-emerald-600 border border-emerald-200">
+<i class="w-4 h-4" data-lucide="file-check-2"></i>
+</div>
+<div>
+<h3 class="text-sm font-bold text-slate-900 uppercase tracking-wide">
+                  5. สรุปข้อกำหนดกฎหมายไทย และลงนามอนุมัติ (Pre-Lift Clearance &amp; Sign-off)
+                </h3>
+<p class="text-xs text-slate-500">ตรวจสอบตามกฎกระทรวงเครื่องจักร ปั้นจั่น พ.ศ. 2564 &amp; แบบ ปจ.2</p>
+</div>
+</div>
+<span class="text-xs px-2.5 py-0.5 rounded-md bg-slate-100 text-slate-700 border border-slate-200 font-mono-eng font-bold">
+              รอตรวจเอกสาร
+            </span>
+</div>
+<!-- Section 5A: Inspection Certification (ปจ.2) Metadata Inputs -->
+<div class="bg-slate-50 p-3.5 rounded-xl border border-slate-200 mb-4 grid grid-cols-1 sm:grid-cols-3 gap-3">
+<div>
+<label class="block text-xs font-semibold text-slate-700 mb-1" for="certNumber">เลขที่ใบรับรอง ปจ.2 (Mobile Crane)</label>
+<input class="w-full bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs text-slate-800 font-mono-eng focus:outline-none focus:border-emerald-500" data-plan-field="true" id="certNumber" maxlength="200" placeholder="ระบุเลขที่เอกสารจริง" type="text"/>
+</div>
+<div>
+<label class="block text-xs font-semibold text-slate-700 mb-1" for="certDate">วันที่ตรวจรับรองล่าสุด</label>
+<input class="w-full bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs text-slate-800 font-mono-eng focus:outline-none focus:border-emerald-500" data-plan-field="true" id="certDate" onchange="checkCertValidity()" type="date"/>
+</div>
+<div>
+<label class="block text-xs font-semibold text-slate-700 mb-1" for="certEngineer">วิศวกรผู้ตรวจรับรอง (กว. เครื่องกล)</label>
+<input class="w-full bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs text-slate-800 font-mono-eng focus:outline-none focus:border-emerald-500" data-plan-field="true" id="certEngineer" maxlength="200" placeholder="ระบุผู้รับรองจากเอกสารจริง" type="text"/>
+</div>
+</div>
+<!-- Section 5B: Verification Checklist Items -->
+<div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5 text-xs text-slate-700 mb-5">
+<label class="flex items-start gap-2.5 p-2.5 rounded-xl bg-slate-50 border border-slate-200 cursor-pointer hover:bg-slate-100 trans-smooth">
+<input class="mt-0.5 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500" id="chkCertValid" type="checkbox"/>
+<div>
+<span class="font-bold text-slate-800 block">ใบรับรอง ปจ.2 มีผลรับรองไม่หมดอายุ</span>
+<span class="text-[10px] text-slate-500 block">ให้ผู้รับผิดชอบยืนยันกำหนดตรวจตามประเภทและการใช้ปั้นจั่น</span>
+</div>
+</label>
+<label class="flex items-start gap-2.5 p-2.5 rounded-xl bg-slate-50 border border-slate-200 cursor-pointer hover:bg-slate-100 trans-smooth">
+<input class="mt-0.5 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500" id="planField17" type="checkbox"/>
+<div>
+<span class="font-bold text-slate-800 block">ทีมงานผ่านการอบรมครบ 4 ผู้ ตามกฎหมาย</span>
+<span class="text-[10px] text-slate-500 block">ผู้บังคับ, ผู้ให้สัญญาณ, ผู้ยึดเกาะ, ผู้ควบคุม</span>
+</div>
+</label>
+<label class="flex items-start gap-2.5 p-2.5 rounded-xl bg-slate-50 border border-slate-200 cursor-pointer hover:bg-slate-100 trans-smooth">
+<input class="mt-0.5 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500" id="planField18" type="checkbox"/>
+<div>
+<span class="font-bold text-slate-800 block">ระยะห่างสายไฟฟ้าแรงสูง พ้นเกณฑ์ปลอดภัย</span>
+<span class="text-[10px] text-slate-500 block">ให้ผู้รับผิดชอบกำหนดระยะตามแรงดันไฟฟ้าและข้อกำหนดที่ใช้กับพื้นที่</span>
+</div>
+</label>
+<label class="flex items-start gap-2.5 p-2.5 rounded-xl bg-slate-50 border border-slate-200 cursor-pointer hover:bg-slate-100 trans-smooth">
+<input class="mt-0.5 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500" id="planField19" type="checkbox"/>
+<div>
+<span class="font-bold text-slate-800 block">ระยะจากขอบหลุมขุดและสภาพลมได้รับการประเมิน</span>
+<span class="text-[10px] text-slate-500 block">ยืนยันสภาพดิน แรงกดขา และข้อจำกัดลมตามคู่มือและลักษณะชิ้นงาน</span>
+</div>
+</label>
+</div>
+<!-- Section 5C: Editable & Printable Sign-off Boxes (3 Columns) -->
+<div class="pt-4 border-t border-slate-100">
+<h4 class="text-xs font-bold text-slate-800 uppercase tracking-wider mb-3 flex items-center gap-2">
+<i class="w-4 h-4 text-amber-600" data-lucide="clipboard-check"></i>
+<span>การลงนามอนุมัติแผนการยก (Lifting Approval Signatures)</span>
+</h4>
+<div class="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs text-slate-700">
+<!-- Card 1: Rigging Planner / Author -->
+<div class="bg-slate-50 p-3.5 rounded-xl border border-slate-200 flex flex-col justify-between print-surface">
+<div>
+<span class="block text-amber-700 font-bold mb-1 text-center">1. ผู้จัดทำแผนการยก (Rigging Planner)</span>
+<div class="h-10 border-b border-dashed border-slate-300 mb-2 flex items-end justify-center pb-1">
+<span class="text-[11px] text-slate-400 font-mono-eng">(ลายมือชื่อ)</span>
+</div>
+<div class="mb-2">
+<input class="w-full bg-white border border-slate-300 rounded-lg px-2.5 py-1 text-xs text-slate-800 text-center focus:outline-none focus:border-amber-500" data-plan-field="true" id="planField20" maxlength="200" placeholder="ระบุชื่อ-นามสกุล ผู้จัดทำ..." type="text"/>
+</div>
+<p class="text-[11px] text-slate-500 font-mono-eng text-center">( ................................................................ )</p>
+</div>
+<div class="mt-3 pt-2 border-t border-slate-200 text-[11px] text-slate-500 text-center">
+<span>วันที่: _____ / _____ / _________</span>
+</div>
+</div>
+<!-- Card 2: Safety Officer (จป.ว) -->
+<div class="bg-slate-50 p-3.5 rounded-xl border border-slate-200 flex flex-col justify-between print-surface">
+<div>
+<span class="block text-sky-700 font-bold mb-1 text-center">2. เจ้าหน้าที่ความปลอดภัย (จป.เทคนิค/วิชาชีพ)</span>
+<div class="h-10 border-b border-dashed border-slate-300 mb-2 flex items-end justify-center pb-1">
+<span class="text-[11px] text-slate-400 font-mono-eng">(ลายมือชื่อ)</span>
+</div>
+<div class="mb-2">
+<input class="w-full bg-white border border-slate-300 rounded-lg px-2.5 py-1 text-xs text-slate-800 text-center focus:outline-none focus:border-sky-500" data-plan-field="true" id="planField21" maxlength="200" placeholder="ระบุชื่อ-นามสกุล จป.วิชาชีพ..." type="text"/>
+</div>
+<p class="text-[11px] text-slate-500 font-mono-eng text-center">( ................................................................ )</p>
+</div>
+<div class="mt-3 pt-2 border-t border-slate-200 text-[11px] text-slate-500 text-center">
+<span>วันที่: _____ / _____ / _________</span>
+</div>
+</div>
+<!-- Card 3: Lifting Engineer (กว.) -->
+<div class="bg-slate-50 p-3.5 rounded-xl border border-slate-200 flex flex-col justify-between print-surface">
+<div>
+<span class="block text-emerald-700 font-bold mb-1 text-center">3. วิศวกรผู้ควบคุม / ผู้อนุมัติแผนการยก (กว.)</span>
+<div class="h-10 border-b border-dashed border-slate-300 mb-2 flex items-end justify-center pb-1">
+<span class="text-[11px] text-slate-400 font-mono-eng">(ลายมือชื่อ)</span>
+</div>
+<div class="mb-2">
+<input class="w-full bg-white border border-slate-300 rounded-lg px-2.5 py-1 text-xs text-slate-800 text-center focus:outline-none focus:border-emerald-500" data-plan-field="true" id="planField22" maxlength="200" placeholder="ระบุชื่อ-นามสกุล วิศวกร (กว.)..." type="text"/>
+</div>
+<p class="text-[11px] text-slate-500 font-mono-eng text-center">( ................................................................ )</p>
+</div>
+<div class="mt-3 pt-2 border-t border-slate-200 text-[11px] text-slate-500 text-center">
+<span>วันที่: _____ / _____ / _________</span>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+<!-- ================= NOTICE & DISCLAIMER SECTION ================= -->
+<div class="mt-6 p-4 bg-amber-50/70 border border-amber-200 rounded-2xl text-slate-700 print-surface">
+<div class="flex items-start gap-3">
+<i class="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5 no-print" data-lucide="alert-triangle"></i>
+<div class="space-y-1">
+<h4 class="text-xs font-bold text-amber-900 uppercase tracking-wide">
+            คำแนะนำ และข้อสงวนสิทธิ์ความรับผิดชอบ (Safety Notice &amp; Engineering Disclaimer)
+          </h4>
+<p class="text-[11px] text-slate-600 leading-relaxed">
+            เครื่องมือคำนวณ และประเมินผลนี้จัดทำขึ้นเพื่อใช้เป็นแนวทางในการวางแผนงานยกขั้นต้น (Preliminary Lifting Plan) เท่านั้น ในการปฏิบัติงานจริง ผู้ใช้งานต้องทำการตรวจวัดระยะ และตรวจสอบความถูกต้องของข้อมูลหน้างานซ้ำอีกครั้ง ร่วมกับคู่มือ Load Chart ฉบับจริงของผู้ผลิตปั้นจั่น โดยการอนุมัติ และดำเนินงานยกต้องได้รับการประเมิน กำกับดูแล และลงนามรับรองจากผู้ที่มีความรู้ความสามารถ หรือ ผู้เชี่ยวชาญตามที่กฎหมายกำหนด (วิศวกรผู้ควบคุมการใช้ปั้นจั่น, จป.วิชาชีพ และทีมงาน 4 ผู้) ก่อนเริ่มปฏิบัติงานทุกครั้ง
+          </p>
+</div>
+</div>
+</div>
+</main>
+<!-- APPLICATION FOOTER -->
+<footer class="bg-white border-t border-slate-200 py-3.5 px-4 text-center text-xs text-slate-500 mt-4 no-print">
+<div class="max-w-7xl mx-auto flex flex-col sm:flex-row justify-between items-center gap-2">
+<div>Mobile Crane Lift Rigging Engineering Suite • เครื่องมือวางแผนเบื้องต้น • ข้อมูลเก็บในอุปกรณ์</div>
+<div class="text-[11px] text-slate-600 font-mono-eng">
+        System Tool Developed by <span class="text-amber-700 font-bold">Thanintron T.</span>
+</div>
+</div>
+</footer>
+<!-- ================= MODALS & HELP TOOLTIPS ================= -->
+<!-- Modal 1: Novice Guide Modal -->
+<div class="hidden fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4" id="guideModal">
+<div class="bg-white border border-slate-200 rounded-2xl max-w-2xl w-full max-h-[85vh] flex flex-col shadow-2xl overflow-hidden">
+<div class="p-4 border-b border-slate-100 flex items-center justify-between">
+<div class="flex items-center gap-2 text-sky-700">
+<i class="w-5 h-5 text-sky-600" data-lucide="book-open"></i>
+<h3 class="font-bold text-slate-900 text-base">คู่มือขั้นตอนคำนวณงานยกสำหรับมือใหม่</h3>
+</div>
+<button class="text-slate-400 hover:text-slate-600 p-1 rounded-lg cursor-pointer" onclick="closeModal('guideModal')">
+<i class="w-5 h-5" data-lucide="x"></i>
+</button>
+</div>
+<div class="p-5 overflow-y-auto space-y-4 text-xs text-slate-600 leading-relaxed">
+<div class="bg-slate-50 p-3.5 rounded-xl border border-slate-200">
+<h4 class="font-bold text-amber-700 text-sm mb-1">ขั้นตอนที่ 1: ตรวจวัดระยะเรขาคณิต (Geometry)</h4>
+<p>วัดค่า <strong>Working Radius (R)</strong> จากกึ่งกลางสลักหมุนของตัวรถเครน (Center of Rotation) ไปยังแนวดิ่งของศูนย์ถ่วงชิ้นงาน และเลือกความยาวบูม <strong>(L)</strong> ที่ยืดออกเพื่อพ้นสิ่งกีดขวาง</p>
+</div>
+<div class="bg-slate-50 p-3.5 rounded-xl border border-slate-200">
+<h4 class="font-bold text-emerald-700 text-sm mb-1">ขั้นตอนที่ 2: รวบรวมน้ำหนักยกทั้งหมด (Total Gross Load)</h4>
+<p>อย่าคิดแค่น้ำหนักชิ้นงานสุทธิ! ต้องนำ <strong>น้ำหนัก Hook Block + อุปกรณ์ช่วยยก (สลิง, ชาเคิล) + น้ำหนักลวดสลิงเผื่อ</strong> มารวมเป็น Total Gross Load เสมอ</p>
+</div>
+<div class="bg-slate-50 p-3.5 rounded-xl border border-slate-200">
+<h4 class="font-bold text-sky-700 text-sm mb-1">ขั้นตอนที่ 3: เปิดคู่มือ Load Chart</h4>
+<p>เปิดสมุดตารางพิกัดยกของเครนรุ่นนั้นๆ ดูช่องความยาวบูม L และรัศมี R ที่กางขาค้ำยัน 100% นำค่า Rated Capacity มากรอกลงในช่องระบบจะประเมินอัตราส่วนความปลอดภัยให้อัตโนมัติ</p>
+</div>
+<div class="bg-slate-50 p-3.5 rounded-xl border border-slate-200">
+<h4 class="font-bold text-purple-700 text-sm mb-1">ขั้นตอนที่ 4: ตรวจสอบขนาดแผ่นรองขาเครน (Outrigger Mat)</h4>
+<p>เลือกสภาพดินหน้างาน ระบบจะคำนวณแรงกดจุดสูงสุด (Max Point Load) และพื้นที่แผ่นรองขาช้างที่ต้องใช้ เพื่อป้องกันไม่ให้ขาช้างเจาะทะลุชั้นดินขณะสวิงบูม</p>
+</div>
+</div>
+<div class="p-3 bg-slate-50 border-t border-slate-200 text-right">
+<button class="px-4 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-900 text-white text-xs font-semibold cursor-pointer" onclick="closeModal('guideModal')">
+          เข้าใจแล้ว / ปิดหน้าต่าง
+        </button>
+</div>
+</div>
+</div>
+<!-- Modal 2: Geometry Explainer Modal -->
+<div class="hidden fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4" id="geometryHelpModal">
+<div class="bg-white border border-slate-200 rounded-2xl max-w-lg w-full p-5 shadow-2xl">
+<div class="flex items-center justify-between mb-3 border-b border-slate-100 pb-2">
+<h3 class="font-bold text-slate-900 text-sm flex items-center gap-2">
+<i class="w-4 h-4 text-blue-600" data-lucide="ruler"></i>
+          คำอธิบายการวัดระยะทางเรขาคณิต (L, R, θ)
+        </h3>
+<button class="text-slate-400 hover:text-slate-600 cursor-pointer" onclick="closeModal('geometryHelpModal')">
+<i class="w-4 h-4" data-lucide="x"></i>
+</button>
+</div>
+<div class="space-y-3 text-xs text-slate-600 leading-relaxed">
+<p><strong class="text-amber-700">รัศมีการทำงาน (Working Radius - R):</strong> ระยะทางในแนวราบจากกึ่งกลางแกนหมุนของเครน (Center of Rotation) ถึงแนวดิ่งของรอก/จุดศูนย์ถ่วงของวัตถุ ไม่ใช่ระยะจากหน้ารถเครน!</p>
+<p><strong class="text-blue-700">ความยาวบูม (Boom Length - L):</strong> วัดจากสลักโคนบูม (Boom Foot Pin) ถึงสลักรอกปลายบูม (Boom Head Sheave Pin)</p>
+<p><strong class="text-emerald-700">มุมบูม (Boom Angle - θ):</strong> คำนวณตามตรีโกณมิติ cos(θ) = R / L ซึ่งมุมยิ่งชัน เครนยิ่งรับน้ำหนักได้มาก</p>
+</div>
+<div class="mt-4 text-right">
+<button class="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-900 text-white text-xs font-semibold cursor-pointer" onclick="closeModal('geometryHelpModal')">
+          ปิดหน้าต่าง
+        </button>
+</div>
+</div>
+</div>
+<!-- Modal 3: Soil Bearing Capacity Table Modal -->
+<div class="hidden fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4" id="soilHelpModal">
+<div class="bg-white border border-slate-200 rounded-2xl max-w-xl w-full p-5 shadow-2xl">
+<div class="flex items-center justify-between mb-3 border-b border-slate-100 pb-2">
+<h3 class="font-bold text-slate-900 text-sm flex items-center gap-2">
+<i class="w-4 h-4 text-sky-600" data-lucide="layers"></i>
+          ตารางอ้างอิงความสามารถในการรับน้ำหนักของดิน (Ground Bearing Capacity)
+        </h3>
+<button class="text-slate-400 hover:text-slate-600 cursor-pointer" onclick="closeModal('soilHelpModal')">
+<i class="w-4 h-4" data-lucide="x"></i>
+</button>
+</div>
+<div class="overflow-x-auto text-xs text-slate-700">
+<table class="w-full text-left border-collapse">
+<thead>
+<tr class="border-b border-slate-200 text-slate-500 font-bold">
+<th class="py-2">ประเภทชั้นดิน / ผิวทาง</th>
+<th class="py-2 text-right">ตัน/ตร.ม. (t/m²)</th>
+<th class="py-2 text-right">กิโลปาสคาล (kPa)</th>
+</tr>
+</thead>
+<tbody class="divide-y divide-slate-100 font-mono-eng">
+<tr>
+<td class="py-2 text-slate-900 font-sans">คอนกรีตเสริมเหล็ก / หินแข็ง</td>
+<td class="py-2 text-right text-emerald-700 font-bold">&gt; 35 - 50</td>
+<td class="py-2 text-right text-slate-500">&gt; 350 - 500</td>
+</tr>
+<tr>
+<td class="py-2 text-slate-900 font-sans">ดินลูกรัง / หินคลุกบดอัดแน่น</td>
+<td class="py-2 text-right text-emerald-700 font-bold">20 - 30</td>
+<td class="py-2 text-right text-slate-500">200 - 300</td>
+</tr>
+<tr>
+<td class="py-2 text-slate-900 font-sans">ดินทรายแน่นปานกลาง / ดินดาน</td>
+<td class="py-2 text-right text-sky-700 font-bold">15 - 20</td>
+<td class="py-2 text-right text-slate-500">150 - 200</td>
+</tr>
+<tr>
+<td class="py-2 text-slate-900 font-sans">ดินเหนียวแข็งปานกลาง</td>
+<td class="py-2 text-right text-amber-700 font-bold">10 - 15</td>
+<td class="py-2 text-right text-slate-500">100 - 150</td>
+</tr>
+<tr>
+<td class="py-2 text-slate-900 font-sans">ดินถมใหม่ / ผิวยางมะตอย (Asphalt)</td>
+<td class="py-2 text-right text-orange-700 font-bold">4 - 8</td>
+<td class="py-2 text-right text-slate-500">40 - 80</td>
+</tr>
+<tr>
+<td class="py-2 text-slate-900 font-sans">ดินโคลน / ชายเลน / ดินอ่อนมาก</td>
+<td class="py-2 text-right text-rose-700 font-bold">2 - 3</td>
+<td class="py-2 text-right text-slate-500">20 - 30</td>
+</tr>
+</tbody>
+</table>
+</div>
+<p class="text-[11px] text-slate-500 mt-3">
+        * ตารางนี้เป็นตัวอย่างประกอบการเรียนรู้ ไม่ใช่ผลทดสอบดินหน้างาน หากยังไม่ทราบค่าดิน ต้องประเมินก่อนใช้งานจริง
+      </p>
+<div class="mt-4 text-right">
+<button class="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-900 text-white text-xs font-semibold cursor-pointer" onclick="closeModal('soilHelpModal')">
+          ปิดหน้าต่าง
+        </button>
+</div>
+</div>
+</div>
+<!-- Modal 4: Diagram Explainer Modal -->
+<div class="hidden fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4" id="diagramExplainerModal">
+<div class="bg-white border border-slate-200 rounded-2xl max-w-md w-full p-5 shadow-2xl">
+<div class="flex items-center justify-between mb-3 border-b border-slate-100 pb-2">
+<h3 class="font-bold text-slate-900 text-sm flex items-center gap-2">
+<i class="w-4 h-4 text-sky-600" data-lucide="info"></i>
+          ความหมายของเส้นสัญลักษณ์ในไดอะแกรม
+        </h3>
+<button class="text-slate-400 hover:text-slate-600 cursor-pointer" onclick="closeModal('diagramExplainerModal')">
+<i class="w-4 h-4" data-lucide="x"></i>
+</button>
+</div>
+<div class="space-y-2 text-xs text-slate-700">
+<div class="flex items-center gap-2">
+<span class="w-3 h-3 rounded-full bg-red-500"></span>
+<span><strong>เส้นประสีแดง (CL):</strong> แนวแกนหมุนกึ่งกลางเครน (Center of Rotation)</span>
+</div>
+<div class="flex items-center gap-2">
+<span class="w-3 h-3 rounded-full bg-amber-500"></span>
+<span><strong>เส้นสีส้ม (R):</strong> รัศมีการทำงานจริง (Working Radius)</span>
+</div>
+<div class="flex items-center gap-2">
+<span class="w-3 h-3 rounded-full bg-blue-600"></span>
+<span><strong>เส้นสีฟ้า (L):</strong> ความยาวบูมเครน (Boom Length)</span>
+</div>
+<div class="flex items-center gap-2">
+<span class="w-3 h-3 rounded-full bg-emerald-600"></span>
+<span><strong>ส่วนโค้งสีเขียว (θ):</strong> องศามุมบูมเทียบกับแนวระนาบ</span>
+</div>
+<div class="flex items-center gap-2">
+<span class="w-3 h-3 rounded-full bg-purple-600"></span>
+<span><strong>เส้นสีม่วง (H):</strong> ความสูงปลายรอกบูม (Tip Height) จากระดับดิน</span>
+</div>
+<div class="flex items-center gap-2">
+<span class="w-3 h-3 rounded-sm bg-sky-600"></span>
+<span><strong>แผ่นสีน้ำเงินใต้ขา:</strong> แผ่นกระจายน้ำหนักขาช้าง (Outrigger Mats)</span>
+</div>
+</div>
+<div class="mt-4 text-right">
+<button class="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-900 text-white text-xs font-semibold cursor-pointer" onclick="closeModal('diagramExplainerModal')">
+          ปิดหน้าต่าง
+        </button>
+</div>
+</div>
+</div>
+<!-- JAVASCRIPT APPLICATION LOGIC -->
+<script src="/static/calculator.js"></script><script src="/static/original-calculator.js"></script><script src="/static/cranelift.js"></script><script src="/static/device-storage.js"></script>
+</body>
+</html>
