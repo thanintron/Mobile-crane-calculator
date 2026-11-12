@@ -3,7 +3,6 @@
 <head>
   <meta charset="UTF-8">
   <style>
-    @import url('https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;600;700&display=swap');
     @page { size: A4 portrait; margin: 12mm; }
     body { font-family: 'Sarabun', sans-serif; font-size: 10pt; color: #1e293b; line-height: 1.4; }
     table { width: 100%; border-collapse: collapse; margin-bottom: 8px; }
@@ -19,6 +18,8 @@
   </style>
 </head>
 <body>
+  <p><strong>เอกสารร่างสำหรับทบทวน — ยังไม่อนุมัติงานยก</strong></p>
+  <ul>{% for item in data.limitations %}<li>{{ item }}</li>{% endfor %}</ul>
   <table>
     <tr style="border: none;">
       <td style="border: none; width: 75%;">
@@ -56,3 +57,4 @@
   </table>
 </body>
 </html>
+
