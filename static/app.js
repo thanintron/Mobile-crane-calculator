@@ -1,0 +1,28 @@
+'use strict';
+const form=document.querySelector('#plan'), $=s=>document.querySelector(s),key='tnt-crane-draft-v1';
+const weights=[['net_load_ton','น้ำหนักชิ้นงาน (ตัน)',5,.01],['hook_weight_ton','น้ำหนักตะขอ (ตัน)',.5,0],['rigging_weight_ton','น้ำหนักอุปกรณ์ยก (ตัน)',.2,0],['wire_fall_deduction_ton','น้ำหนักสลิงลวดที่หัก (ตัน)',.1,0],['jib_deduction_ton','ค่าหักจิ๊บ (ตัน)',0,0]];
+const ground=[['ground_bearing_capacity_ton_m2','การรับน้ำหนักดิน (ตัน/ตร.ม.)',15,.01],['soil_safety_factor','ตัวคูณสำหรับดิน (สมมติฐาน)',1.25,1]];
+for(const [target,fields] of [['#weights',weights],['#ground',ground]])for(const [name,label,value,min] of fields){const l=document.createElement('label');l.textContent=label;const i=document.createElement('input');Object.assign(i,{name,type:'number',value,min,step:'any',required:true});l.append(i);$(target).append(l);}
+let lastPayload=null,installEvent=null;
+function message(text,error=false){$('#message').textContent=text;$('#message').className=error?'error':'';}
+function invalidate(){lastPayload=null;$('#output').hidden=true;$('#empty').hidden=false;}
+form.addEventListener('input',invalidate);form.addEventListener('change',invalidate);
+function payload(){const data=Object.fromEntries(new FormData(form));for(const input of form.querySelectorAll('input[type=number]'))data[input.name]=Number(input.value);return data;}
+form.addEventListener('submit',async e=>{e.preventDefault();if(!form.reportValidity())return;invalidate();message('กำลังคำนวณ…');const data=payload();$('#calculate').disabled=true;try{const r=calculateLocal(data);if(JSON.stringify(data)!==JSON.stringify(payload())){message('ข้อมูลเปลี่ยนแล้ว กรุณาคำนวณอีกครั้ง');return;}lastPayload=data;$('#util').textContent=r.utilization_rate_pct+'%';$('#status').textContent=r.utilization_rate_pct>100?'เกินพิกัดในตารางตัวอย่าง — ต้องทบทวนใหม่':'เอกสารร่าง — ยังไม่อนุมัติงานยก';$('#status').className=r.utilization_rate_pct>100?'error':'';$('#metrics').replaceChildren();for(const [label,value] of [['น้ำหนักรวม',r.total_gross_load_ton+' ตัน'],['พิกัดจากตารางตัวอย่าง',r.rated_capacity_ton+' ตัน'],['มุมบูมโดยประมาณ',r.boom_angle_deg+'°'],['ความสูงโดยประมาณ (+จุดหมุน 2 ม.)',r.lifting_height_m+' ม.'],['แรงกดขาตามสมมติฐาน 75%',r.max_point_load_ton+' ตัน'],['พื้นที่แผ่นรองโดยประมาณ',r.required_mat_area_m2+' ตร.ม.'],['ขนาดแผ่นรองโดยประมาณ',r.recommended_mat_dim]]){const dt=document.createElement('dt'),dd=document.createElement('dd');dt.textContent=label;dd.textContent=value;$('#metrics').append(dt,dd);}$('#output').hidden=false;$('#empty').hidden=true;message('คำนวณแล้ว กรุณาทบทวนข้อจำกัดก่อนใช้งาน');}catch(e){message(e.message,true);}finally{$('#calculate').disabled=false;}});
+$('#save').onclick=()=>{try{localStorage.setItem(key,JSON.stringify(payload()));message('บันทึกร่างไว้ในเบราว์เซอร์นี้แล้ว');}catch{message('บันทึกร่างไม่ได้ กรุณาตรวจพื้นที่และการตั้งค่าเบราว์เซอร์',true);}};
+$('#reset').onclick=()=>{if(confirm('ล้างข้อมูลและร่างที่บันทึกไว้ในเครื่องนี้?')){form.reset();invalidate();try{localStorage.removeItem(key);}catch{}message('ล้างข้อมูลแล้ว');}};
+
+$('#pdf').onclick=()=>{if(lastPayload)window.print();};
+function restore(draft){
+ if(!draft||typeof draft!=='object'||Array.isArray(draft))throw Error('รูปแบบไฟล์ไม่ถูกต้อง');
+ const allowed=Object.keys(payload());
+ for(const n of allowed){if(!(n in draft))throw Error('ข้อมูลสำรองไม่ครบถ้วน');const el=form.elements[n];if(el.type==='number'&&(typeof draft[n]!=='number'||!Number.isFinite(draft[n])))throw Error('ตัวเลขในไฟล์ไม่ถูกต้อง');if(el.type!=='number'&&(typeof draft[n]!=='string'||draft[n].length>150))throw Error('ข้อความในไฟล์ไม่ถูกต้อง');}
+ if(!CRANE_MODELS[draft.crane_model])throw Error('ไม่พบรุ่นปั้นจั่นในข้อมูลสำรอง');
+ for(const n of allowed)form.elements[n].value=draft[n];invalidate();
+}
+$('#backup').onclick=()=>{const blob=new Blob([JSON.stringify({version:1,plan:payload()},null,2)],{type:'application/json'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='TNT-Crane-Draft.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),60000);message('ส่งออกไฟล์สำรองแล้ว ไฟล์นี้มีข้อมูลแผนและชื่อผู้จัดทำ');};
+$('#import').onchange=async e=>{const file=e.target.files[0];if(!file)return;try{if(file.size>100000)throw Error('ไฟล์ใหญ่เกินขนาดที่รองรับ');const doc=JSON.parse(await file.text());if(doc.version!==1)throw Error('ไม่รองรับเวอร์ชันไฟล์นี้');if(!confirm('นำเข้าไฟล์และแทนที่ข้อมูลบนหน้าจอปัจจุบัน?'))return;restore(doc.plan);message('นำเข้าแล้ว กดบันทึกร่างเพื่อเก็บในเครื่อง');}catch(err){message(err.message,true);}finally{e.target.value='';}};
+function init(){const models=Object.entries(CRANE_MODELS);$('#models').replaceChildren(...models.map(([id,m])=>new Option(m.name+' · ข้อมูลตัวอย่าง',id)));$('#models').disabled=false;try{const raw=localStorage.getItem(key);if(raw){restore(JSON.parse(raw));message('เรียกคืนร่างที่บันทึกไว้แล้ว');}}catch{message('อ่านร่างเดิมไม่ได้ กรุณานำเข้าไฟล์สำรองหรือกรอกข้อมูลใหม่',true);}}
+function network(){$('#network').textContent='ข้อมูลแผนเก็บในเครื่องนี้ · '+(navigator.onLine?'พร้อมใช้งาน':'ออฟไลน์ — คำนวณและพิมพ์รายงานได้');}window.addEventListener('online',network);window.addEventListener('offline',network);network();
+window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();installEvent=e;$('#install').hidden=false;});$('#install').onclick=async()=>{if(installEvent){await installEvent.prompt();installEvent=null;$('#install').hidden=true;}};
+if('serviceWorker'in navigator)navigator.serviceWorker.register('/sw.js').then(()=>navigator.serviceWorker.ready).then(()=>{message('เตรียมแอปสำหรับออฟไลน์แล้ว');}).catch(()=>message('ยังเตรียมใช้ออฟไลน์ไม่ได้ กรุณาเปิดผ่าน HTTPS หรือ localhost',true));init();

@@ -1,16 +1,16 @@
 import io
 import math
 import base64
-import qrcode
+from pathlib import Path
 from datetime import datetime, date
 from typing import Optional
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import StreamingResponse
+from fastapi.responses import StreamingResponse, FileResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 from jinja2 import Environment, FileSystemLoader
-from weasyprint import HTML
 
 app = FastAPI(
     title="Mobile Crane Lifting Plan & Safety API",
@@ -26,7 +26,24 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-env = Environment(loader=FileSystemLoader("templates"))
+BASE_DIR = Path(__file__).resolve().parent
+env = Environment(loader=FileSystemLoader(BASE_DIR / "templates"), autoescape=True)
+app.mount("/static", StaticFiles(directory=BASE_DIR / "static"), name="static")
+
+@app.get("/", include_in_schema=False)
+async def home():
+    return FileResponse(BASE_DIR / "static" / "index.html")
+
+@app.get("/sw.js", include_in_schema=False)
+async def service_worker():
+    return FileResponse(BASE_DIR / "static" / "sw.js", media_type="application/javascript",
+                        headers={"Cache-Control": "no-cache"})
+
+@app.get("/api/v1/crane/models")
+async def models():
+    return [{"id": key, "name": value["name"], "chart": value["chart"],
+             "source_status": "unverified_example"}
+            for key, value in LOAD_CHART_DATABASE.items()]
 
 LOAD_CHART_DATABASE = {
     "TADANO_GR500EX": {
@@ -44,6 +61,7 @@ LOAD_CHART_DATABASE = {
 }
 
 class LiftCalculationRequest(BaseModel):
+    model_config = {"allow_inf_nan": False}
     crane_model: str = Field("TADANO_GR500EX")
     boom_length_m: float = Field(..., gt=0)
     working_radius_m: float = Field(..., gt=0)
@@ -66,17 +84,22 @@ def get_rated_capacity(model: str, boom: float, radius: float) -> float:
         raise HTTPException(status_code=400, detail=f"ไม่พบสเปกเครนรุ่น: {model}")
     chart = LOAD_CHART_DATABASE[model]["chart"]
     available_booms = sorted(chart.keys())
+    if boom < available_booms[0]:
+        raise HTTPException(status_code=422, detail="ความยาวบูมต่ำกว่าขอบเขตข้อมูลตัวอย่าง")
     target_boom = next((b for b in available_booms if b >= boom), None)
     if not target_boom:
         raise HTTPException(status_code=400, detail=f"ความยาวบูม {boom} ม. เกินขอบเขตตาราง")
     radius_data = chart[target_boom]
     available_radii = sorted(radius_data.keys())
+    if radius < available_radii[0]:
+        raise HTTPException(status_code=422, detail="รัศมีต่ำกว่าขอบเขตข้อมูลตัวอย่างของช่วงบูมนี้")
     if radius > available_radii[-1]:
         raise HTTPException(status_code=400, detail=f"รัศมี {radius} ม. เกินระยะทำงานสูงสุด")
     target_radius = next((r for r in available_radii if r >= radius), None)
     return radius_data[target_radius]
 
 def generate_qr_base64(data_text: str) -> str:
+    import qrcode
     qr = qrcode.QRCode(version=1, box_size=4, border=1)
     qr.add_data(data_text)
     qr.make(fit=True)
@@ -105,6 +128,14 @@ async def calculate_lift(req: LiftCalculationRequest):
     side_m = math.ceil(math.sqrt(required_mat_area) * 10) / 10
     
     return {
+        "review_status": "DRAFT — NOT APPROVED",
+        "limitations": [
+            "Load chart ในระบบเป็นข้อมูลตัวอย่างที่ยังไม่ได้ยืนยันกับผู้ผลิต",
+            "ระบบเลือกช่วงบูมและรัศมีถัดไปในตารางตัวอย่าง ไม่ยืนยันความเหมาะสมของ configuration จริง",
+            "มุมและความสูงเป็นเรขาคณิตอย่างง่าย รวมสมมติฐานจุดหมุนสูง 2 เมตร",
+            "แรงกดขาใช้สมมติฐาน 75% ของน้ำหนักระบบ ไม่ใช่ outrigger reaction จากผู้ผลิต",
+            "ยังไม่ได้ประเมินลม สภาพดินจริง configuration และความครบถ้วนของเอกสาร"
+        ],
         "boom_angle_deg": round(boom_angle_deg, 1),
         "lifting_height_m": round(lifting_height_m, 2),
         "total_gross_load_ton": round(total_gross, 2),
@@ -117,15 +148,16 @@ async def calculate_lift(req: LiftCalculationRequest):
 
 @app.post("/api/v1/crane/export-pdf")
 async def export_pdf(req: LiftCalculationRequest):
+    from weasyprint import HTML
     calc = await calculate_lift(req)
     template = env.get_template("lifting_plan_template.html")
     
     util = calc["utilization_rate_pct"]
-    status_class = "DANGER" if util > 100 else ("CRITICAL" if util >= 75 else "SAFE")
-    status_label = "OVERLOAD PROHIBITED" if util > 100 else ("CRITICAL LIFT" if util >= 75 else "APPROVED LIFT")
+    status_class = "DANGER" if util > 100 else "CRITICAL"
+    status_label = "DRAFT — NOT APPROVED"
     
     plan_id = f"LP-{datetime.now().strftime('%Y%m%d-%H%M')}"
-    qr_b64 = generate_qr_base64(f"https://safety.verify/lift?id={plan_id}")
+    qr_b64 = generate_qr_base64(f"DRAFT | {plan_id} | NOT A VERIFICATION LINK")
     
     render_data = {
         "plan_id": plan_id,
@@ -133,7 +165,7 @@ async def export_pdf(req: LiftCalculationRequest):
         "status_class": status_class,
         "status_label": status_label,
         "qr_base64": qr_b64,
-        "data": {**req.dict(), **calc, "crane_name": LOAD_CHART_DATABASE[req.crane_model]["name"]}
+        "data": {**req.model_dump(), **calc, "crane_name": LOAD_CHART_DATABASE[req.crane_model]["name"]}
     }
     
     rendered_html = template.render(**render_data)
@@ -144,3 +176,4 @@ async def export_pdf(req: LiftCalculationRequest):
         media_type="application/pdf",
         headers={"Content-Disposition": f"attachment; filename={plan_id}.pdf"}
     )
+
